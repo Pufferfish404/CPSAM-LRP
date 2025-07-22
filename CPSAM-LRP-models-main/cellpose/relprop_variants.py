@@ -6,11 +6,6 @@ import torch.nn.functional as F
 from einops import rearrange
 from CPSAM-LRP.modules.layers_ours import *
 
-class Conv2dWithRelprop(Conv2d):
-    def relprop(self, cam, **kwargs):
-        weight = self.weight.clamp(min=0)
-        return F.conv_transpose2d(cam, weight, bias=None, stride=self.stride, padding=self.padding)
-
 class AttentionWithRelprop(nn.Module):
     def __init__(
         self,
@@ -22,6 +17,9 @@ class AttentionWithRelprop(nn.Module):
         input_size: Optional[Tuple[int, int]] = None,
     ) -> None:
         super().__init__()
+        self.qkv = Linear(dim, dim * 3, bias=qkv_bias)
+        self.proj = Linear(dim, dim)
+        
         # A = Q*K^T
         self.matmul1 = einsum('bhid,bhjd->bhij')
         # attn = A*V
@@ -127,7 +125,7 @@ class PatchEmbeddingWithRelprop(nn.Module):
         cam = self.proj.relprop(cam, **kwargs)
         return cam
       
-class MLPWithRelprop():
+class MLPBlockWithRelprop():
     def __init__(
         self,
         embedding_dim: int,
@@ -182,5 +180,44 @@ class LayerNorm2dWithRelprop():
         x = x + self.mu
         return x
 
-class BlockWithRelprop():
-    def relprop(self, cam, **kwargs):
+class BlockWithRelprop(nn.Module):
+    def __init__(self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = True,
+        norm_layer: Type[nn.Module] = LayerNorm(),
+        act_layer: Type[nn.Module] = GELU(),
+        use_rel_pos: bool = False,
+        rel_pos_zero_init: bool = True,
+        window_size: int = 0,
+        input_size: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        super().__init__()
+        self.attn = AttentionWithRelprop(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            use_rel_pos=use_rel_pos,
+            rel_pos_zero_init=rel_pos_zero_init,
+            input_size=input_size if window_size == 0 else (window_size, window_size),
+        )
+        self.mlp = MLPBlockWithRelprop(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
+    '''
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        shortcut = x
+        x = self.norm1(x)
+        x = self.attn(x)
+        x = shortcut + x
+        x = x + self.mlp(self.norm2(x))
+    '''
+    def relprop(self, cam: torch.Tensor, **kwargs) -> torch.Tensor:
+        cam1 = cam
+        cam = self.mlp.relprop(cam, **kwargs)
+        cam = self.norm2.relprop(cam, **kwargs)
+        cam = cam1 + cam # undo x = x + MLP(norm2(x))
+        cam1 = cam
+        cam = self.attn.relprop(cam, **kwargs)
+        cam = self.norm1.relprop(cam, **kwargs) #undo x 
+        cam = cam1 + cam # undo x = shortcut + x
+        return cam
