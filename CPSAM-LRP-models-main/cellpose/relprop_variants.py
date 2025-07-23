@@ -1,5 +1,5 @@
 import torch
-from segment_anything import sam_model_registry
+
 torch.backends.cuda.matmul.allow_tf32 = True
 from torch import nn 
 import torch.nn.functional as F
