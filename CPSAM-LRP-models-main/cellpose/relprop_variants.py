@@ -5,7 +5,7 @@ from torch import nn
 import torch.nn.functional as F
 from typing import Optional, Tuple, Type
 from einops import rearrange
-from CPSAM-LRP.modules.layers_ours import *
+from modules.layers_ours import *
 
 from baselines.ViT.helpers import load_pretrained
 from baselines.ViT.weight_init import trunc_normal_
