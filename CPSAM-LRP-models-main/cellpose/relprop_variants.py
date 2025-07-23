@@ -126,7 +126,7 @@ class AttentionWithRelprop(nn.Module):
     
         return self.qkv.relprop(cam_qkv, **kwargs)
 
-class PatchEmbeddingWithRelprop(nn.Module):
+class PatchEmbedWithRelprop(nn.Module):
     def __init__(
         self,
         kernel_size: Tuple[int, int] = (16, 16),
