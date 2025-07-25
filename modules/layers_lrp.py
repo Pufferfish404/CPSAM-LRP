@@ -210,7 +210,6 @@ class Linear(nn.Linear, RelProp):
 
         return R
 
-
 class Conv2d(nn.Conv2d, RelProp):
     def gradprop2(self, DY, weight):
         Z = self.forward(self.X)
@@ -226,11 +225,17 @@ class Conv2d(nn.Conv2d, RelProp):
             nw = torch.clamp(self.weight, max=0)
             X = self.X
             L = self.X * 0 + \
-                torch.min(torch.min(torch.min(self.X, dim=1, keepdim=True)[0], dim=2, keepdim=True)[0], dim=3,
-                          keepdim=True)[0]
+                torch.min(
+                    torch.min(
+                        torch.min(self.X, dim=1, keepdim=True)[0], 
+                    dim=2, keepdim=True)[0], 
+                dim=3, keepdim=True)[0]
             H = self.X * 0 + \
-                torch.max(torch.max(torch.max(self.X, dim=1, keepdim=True)[0], dim=2, keepdim=True)[0], dim=3,
-                          keepdim=True)[0]
+                torch.max(
+                    torch.max(
+                        torch.max(self.X, dim=1, keepdim=True)[0], 
+                    dim=2, keepdim=True)[0], 
+                dim=3, keepdim=True)[0]
             Za = torch.conv2d(X, self.weight, bias=None, stride=self.stride, padding=self.padding) - \
                  torch.conv2d(L, pw, bias=None, stride=self.stride, padding=self.padding) - \
                  torch.conv2d(H, nw, bias=None, stride=self.stride, padding=self.padding) + 1e-9
@@ -259,3 +264,55 @@ class Conv2d(nn.Conv2d, RelProp):
 
             R = alpha * activator_relevances - beta * inhibitor_relevances
         return R
+
+class ConvTranspose2d(nn.ConvTranspose2d, RelProp):
+    def gradprop2(self, DY, weight):
+        conv_kwargs = {
+            "stride": self.stride,
+            "padding": self.padding,
+        }
+        if hasattr(self, "dilation"):
+            conv_kwargs["dilation"] = self.dilation
+        if hasattr(self, "output_padding"):
+            conv_kwargs["output_padding"] = self.output_padding
+        return F.conv2d(DY, weight, **conv_kwargs)
+
+    def relprop(self, R, alpha):
+          if self.X.shape[1] == 3:
+              pw = torch.clamp(self.weight, min=0)
+              nw = torch.clamp(self.weight, max=0)
+              X = self.X
+              L = self.X * 0 + \
+                  torch.min(torch.min(torch.min(self.X, dim=1, keepdim=True)[0], dim=2, keepdim=True)[0], dim=3,
+                            keepdim=True)[0]
+              H = self.X * 0 + \
+                  torch.max(torch.max(torch.max(self.X, dim=1, keepdim=True)[0], dim=2, keepdim=True)[0], dim=3,
+                            keepdim=True)[0]
+              Za = torch.conv_transpose2d(X, self.weight, bias=None, stride=self.stride, padding=self.padding) - \
+                   torch.conv_transpose2d(L, pw, bias=None, stride=self.stride, padding=self.padding) - \
+                   torch.conv_transpose2d(H, nw, bias=None, stride=self.stride, padding=self.padding) + 1e-9
+  
+              S = R / Za
+              C = X * self.gradprop2(S, self.weight) - L * self.gradprop2(S, pw) - H * self.gradprop2(S, nw)
+              R = C
+          else:
+              beta = alpha - 1
+              pw = torch.clamp(self.weight, min=0)
+              nw = torch.clamp(self.weight, max=0)
+              px = torch.clamp(self.X, min=0)
+              nx = torch.clamp(self.X, max=0)
+  
+              def f(w1, w2, x1, x2):
+                  Z1 = F.conv_transpose2d(x1, w1, bias=None, stride=self.stride, padding=self.padding)
+                  Z2 = F.conv_transpose2d(x2, w2, bias=None, stride=self.stride, padding=self.padding)
+                  S1 = safe_divide(R, Z1)
+                  S2 = safe_divide(R, Z2)
+                  C1 = x1 * self.gradprop(Z1, x1, S1)[0]
+                  C2 = x2 * self.gradprop(Z2, x2, S2)[0]
+                  return C1 + C2
+  
+              activator_relevances = f(pw, nw, px, nx)
+              inhibitor_relevances = f(nw, pw, px, nx)
+  
+              R = alpha * activator_relevances - beta * inhibitor_relevances
+          return R
