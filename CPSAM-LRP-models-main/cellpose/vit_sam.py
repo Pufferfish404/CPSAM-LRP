@@ -7,6 +7,40 @@ from segment_anything import sam_model_registry
 torch.backends.cuda.matmul.allow_tf32 = True
 from torch import nn 
 import torch.nn.functional as F
+from cellpose.relprop_variants import *
+import segment_anything.modeling.image_encoder as img_en
+from segment_anything.modeling.image_encoder import (
+    ImageEncoderViT as SAMImageEncoderViT,
+    Block as SAMBlock,
+    Attention as SAMAttention,
+    PatchEmbed as SAMPatchEmbed,
+)
+import segment_anything.modeling.common as common
+from segment_anything.modeling.common import (
+    LayerNorm2d as SAMLayerNorm2d,
+    MLPBlock as SAMMLPBlock,
+)
+from modules.layers_ours import *
+
+class MPatchEncoder(ImageEncoderViTWithRelprop, SAMImageEncoderViT):
+    pass
+class MPatchBlock(BlockWithRelprop, SAMBlock):
+    pass
+class MPatchAttn(AttentionWithRelprop, SAMAttention):
+    pass
+class MPatchPatchEmbed(PatchEmbedWithRelprop, SAMPatchEmbed):
+    pass
+class MPatchLayerNorm(LayerNorm2dWithRelprop, SAMLayerNorm2d):
+    pass
+class MPatchMLP(MLPBlockWithRelprop, SAMMLPBlock):
+    pass
+
+img_en.ImageEncoderViT = MPatchEncoder
+img_en.Block = MPatchBlock
+img_en.Attention = MPatchAttn
+img_en.PatchEmbed = MPatchPatchEmbed
+common.LayerNorm2d = MPatchLayerNorm
+common.MLPBlock = MPatchMLP
 
 class Transformer(nn.Module):
     def __init__(self, backbone="vit_l", ps=8, nout=3, bsize=256, rdrop=0.4,
@@ -31,7 +65,7 @@ class Transformer(nn.Module):
         # readout weights for nout output channels
         # if nout is changed, weights will not load correctly from pretrained Cellpose-SAM
         self.nout = nout
-        self.out = nn.Conv2d(256, self.nout * ps**2, kernel_size=1)
+        self.out = Conv2d(256, self.nout * ps**2, kernel_size=1)
 
         # W2 reshapes token space to pixel space, not trainable
         self.W2 = nn.Parameter(torch.eye(self.nout * ps**2).reshape(self.nout*ps**2, self.nout, ps, ps), 
@@ -51,12 +85,15 @@ class Transformer(nn.Module):
 
         self.dtype = dtype
 
+        self.pool = IndexSelect()
+        self.add = Add()
+
     def forward(self, x):      
         # same progression as SAM until readout
         x = self.encoder.patch_embed(x)
         
         if self.encoder.pos_embed is not None:
-            x = x + self.encoder.pos_embed
+            x = self.add([x, self.encoder.pos_embed])
         
         if self.training and self.rdrop > 0:
             nlay = len(self.encoder.blocks)
