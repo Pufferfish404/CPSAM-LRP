@@ -7,7 +7,7 @@ from segment_anything import sam_model_registry
 torch.backends.cuda.matmul.allow_tf32 = True
 from torch import nn 
 import torch.nn.functional as F
-from cellpose.relprop_variants import *
+from CPSAM_LRP_models.cellpose.relprop_variants import *
 import segment_anything.modeling.image_encoder as img_en
 from segment_anything.modeling.image_encoder import (
     ImageEncoderViT as SAMImageEncoderViT,
@@ -70,6 +70,7 @@ class Transformer(nn.Module):
         # W2 reshapes token space to pixel space, not trainable
         self.W2 = nn.Parameter(torch.eye(self.nout * ps**2).reshape(self.nout*ps**2, self.nout, ps, ps), 
                                requires_grad=False)
+        self.deconv = ConvTranspose2d(W2, self.ps, padding=0)
         
         # fraction of layers to drop at random during training
         self.rdrop = rdrop
@@ -110,7 +111,7 @@ class Transformer(nn.Module):
 
         # readout is changed here
         x1 = self.out(x)
-        x1 = F.conv_transpose2d(x1, self.W2, stride = self.ps, padding = 0)
+        x1 = self.deconv(x1)
         
         # maintain the second output of feature size 256 for backwards compatibility
            
