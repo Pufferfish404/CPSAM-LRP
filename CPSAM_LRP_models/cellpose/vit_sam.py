@@ -88,6 +88,7 @@ class Transformer(nn.Module):
 
         self.pool = IndexSelect()
         self.add = Add()
+        self.droppedlayers = None
 
     def forward(self, x):      
         # same progression as SAM until readout
@@ -97,9 +98,10 @@ class Transformer(nn.Module):
             x = self.add([x, self.encoder.pos_embed])
         
         if self.training and self.rdrop > 0:
-            nlay = len(self.encoder.blocks)
+            nlay = len(self.encoder.blocks)            
             rdrop = (torch.rand((len(x), nlay), device=x.device) < 
                      torch.linspace(0, self.rdrop, nlay, device=x.device)).to(x.dtype)
+            self.droppedlayers = rdrop
             for i, blk in enumerate(self.encoder.blocks):            
                 mask = rdrop[:,i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
                 x = x * mask + blk(x) * (1-mask)
@@ -116,6 +118,28 @@ class Transformer(nn.Module):
         # maintain the second output of feature size 256 for backwards compatibility
            
         return x1, torch.randn((x.shape[0], 256), device=x.device)
+
+    def relprop(self, cam, **kwargs):
+        cam = self.deconv.relprop(cam, **kwargs)
+        cam = self.out.relprop(cam, **kwargs)
+
+        cam1 = self.encoder.neck.relprop(cam.permute(0, 2, 3, 1), **kwargs)
+        
+        if self.training and self.rdrop > 0:
+            nlay = len(self.encoder.blocks)
+            rdrop = self.droppedlayers
+            for i, blk in enumerate(reversed((self.encoder.blocks))):            
+                mask = rdrop[:,nlay-1-i].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+                cam1 = cam1 * mask + blk.relprop((cam1 * (1-mask)), **kwargs)
+        else:
+            for blk in reversed(self.encoder.blocks):
+                cam1 = blk.relprop(cam1, **kwargs)
+
+        if self.encoder.pos_embed is not None:
+            cam1 = self.add.relprop(cam1, **kwargs)
+        
+        cam1 = self.encoder.patch_embed.relprop(cam1, **kwargs)
+        return cam1
     
     def load_model(self, PATH, device, strict = False):        
         state_dict = torch.load(PATH, map_location = device, weights_only=True)
