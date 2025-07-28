@@ -172,13 +172,13 @@ class LayerNorm2dWithRelprop(nn.Module):
         self.mu = None
         self.variance = None
 
-   def get_mu(self):
+    def get_mu(self):
         return self.mu
   
     def save_mu(self, mu):
         self.mu = mu
 
-   def get_variance(self):
+    def get_variance(self):
         return self.variance
   
     def save_variance(self, variance):
