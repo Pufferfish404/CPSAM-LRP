@@ -209,7 +209,7 @@ class BlockWithRelprop(nn.Module):
         num_heads: int,
         mlp_ratio: float = 4.0,
         qkv_bias: bool = True,
-        norm_layer: Type[nn.Module] = LayerNorm(),
+        norm_layer: Type[nn.Module] = LayerNorm(dim, eps=1e-6),
         act_layer: Type[nn.Module] = GELU(),
         use_rel_pos: bool = False,
         rel_pos_zero_init: bool = True,
