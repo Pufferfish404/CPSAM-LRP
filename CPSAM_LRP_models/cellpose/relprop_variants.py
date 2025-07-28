@@ -34,7 +34,14 @@ class AttentionWithRelprop(nn.Module):
         rel_pos_zero_init: bool = True,
         input_size: Optional[Tuple[int, int]] = None,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            dim=dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            use_rel_pos=use_rel_pos,
+            rel_pos_zero_init=rel_pos_zero_init,
+            input_size=input_size,
+        )
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim**-0.5
@@ -135,7 +142,13 @@ class PatchEmbedWithRelprop(nn.Module):
         in_chans: int = 3,
         embed_dim: int = 768,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+        )
         self.proj = Conv2d(
             in_chans, embed_dim, kernel_size=kernel_size, stride=stride, padding=padding
         )
@@ -152,7 +165,11 @@ class MLPBlockWithRelprop(nn.Module):
         mlp_dim: int,
         act: Type[nn.Module] = GELU(),
     ) -> None:
-        super().__init__()
+        super().__init__(
+            embedding_dim=embedding_dim,
+            mlp_dim=mlp_dim,
+            act=act,
+        )
         self.lin1 = Linear(embedding_dim, mlp_dim)
         self.lin2 = Linear(mlp_dim, embedding_dim)
         self.act = act()
@@ -165,7 +182,10 @@ class MLPBlockWithRelprop(nn.Module):
 
 class LayerNorm2dWithRelprop(nn.Module):
     def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
-        super().__init__()
+        super().__init__(
+            num_channels=num_channels,
+            eps=eps,
+        )
         self.weight = nn.Parameter(torch.ones(num_channels))
         self.bias = nn.Parameter(torch.zeros(num_channels))
         self.eps = eps
@@ -216,7 +236,18 @@ class BlockWithRelprop(nn.Module):
         window_size: int = 0,
         input_size: Optional[Tuple[int, int]] = None,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            dim=dim,
+            num_heads=num_heads,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
+            use_rel_pos=use_rel_pos,
+            rel_pos_zero_init=rel_pos_zero_init,
+            window_size=window_size,
+            input_size=input_size,
+        )
         self.norm1 = norm_layer(dim)
         self.attn = AttentionWithRelprop(
             dim,
@@ -273,7 +304,24 @@ class ImageEncoderViTWithRelprop(nn.Module):
         window_size: int = 0,
         global_attn_indexes: Tuple[int, ...] = (),
     ) -> None:
-        super().__init__()
+        super().__init__(
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            depth=depth,
+            num_heads=num_heads,
+            mlp_ratio=mlp_ratio,
+            out_chans=out_chans,
+            qkv_bias=qkv_bias,
+            norm_layer=norm_layer,
+            act_layer=act_layer,
+            use_abs_pos=use_abs_pos,
+            use_rel_pos=use_rel_pos,
+            rel_pos_zero_init=rel_pos_zero_init,
+            window_size=window_size,
+            global_attn_indexes=global_attn_indexes,
+        )
         self.pos_embed: Optional[nn.Parameter] = None
         if use_abs_pos:
             # Initialize absolute positional embedding with pretrain image size.
