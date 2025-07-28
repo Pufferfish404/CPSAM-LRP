@@ -38,7 +38,7 @@ class AttentionWithRelprop(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim**-0.5
-        
+
         self.qkv = Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = Linear(dim, dim)
         
@@ -156,7 +156,7 @@ class MLPBlockWithRelprop(nn.Module):
         self.lin1 = Linear(embedding_dim, mlp_dim)
         self.lin2 = Linear(mlp_dim, embedding_dim)
         self.act = act()
-      
+
     def relprop(self, cam: torch.Tensor, **kwargs) -> torch.Tensor:
         cam = self.lin2.relprop(cam, **kwargs)
         cam = self.act.relprop(cam, **kwargs)
@@ -180,7 +180,7 @@ class LayerNorm2dWithRelprop(nn.Module):
 
     def get_variance(self):
         return self.variance
-  
+
     def save_variance(self, variance):
         self.variance = variance
 
@@ -192,7 +192,7 @@ class LayerNorm2dWithRelprop(nn.Module):
         x = (x - u) / torch.sqrt(s + self.eps)
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
-        
+
     def relprop(self, cam, **kwargs):
         weight = self.weight[:, None, None]
         boolmask = weight != 0
@@ -233,7 +233,7 @@ class BlockWithRelprop(nn.Module):
         self.add2 = Add()
         self.clone1 = Clone()
         self.clone2 = Clone()
-        
+
     def forward(self, x):
         x1, x2 = self.clone1(x, 2)
         x = self.add1([x1, self.attn(self.norm1(x2))])
@@ -329,7 +329,7 @@ class ImageEncoderViTWithRelprop(nn.Module):
 
         def save_inp_grad(self,grad):
             self.inp_grad = grad
-    
+
         def get_inp_grad(self):
             return self.inp_grad
 
@@ -350,7 +350,7 @@ class ImageEncoderViTWithRelprop(nn.Module):
     def relprop(self, cam = None, method = "transformer_attribution", is_ablation = False, start_layer = 0, **kwargs):
         cam = self.neck.relprop(cam, **kwargs)
         cam = cam.permute(0, 2, 3, 1)
-        
+
         for blk in reversed(self.blocks):
             cam = blk.relprop(cam, **kwargs)
 
@@ -373,7 +373,7 @@ class ImageEncoderViTWithRelprop(nn.Module):
             cam = compute_rollout_attention(attn_cams, start_layer=start_layer)
             cam = cam[:, 0, 1:]
             return cam
-        
+
         # method name grad is legacy
         elif method == "transformer_attribution" or method == "grad":
             cams = []
@@ -388,7 +388,7 @@ class ImageEncoderViTWithRelprop(nn.Module):
             rollout = compute_rollout_attention(cams, start_layer=start_layer)
             cam = rollout[:, 0, 1:]
             return cam
-            
+
         elif method == "last_layer":
             cam = self.blocks[-1].attn.get_attn_cam()
             cam = cam[0].reshape(-1, cam.shape[-1], cam.shape[-1])
