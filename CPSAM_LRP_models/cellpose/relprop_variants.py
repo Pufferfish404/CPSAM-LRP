@@ -24,7 +24,7 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
         joint_attention = all_layer_matrices[i].bmm(joint_attention)
     return joint_attention
 
-class AttentionWithRelprop(nn.Module):
+class AttentionWithRelprop(Attention):
     def __init__(
         self,
         dim: int,
@@ -35,12 +35,12 @@ class AttentionWithRelprop(nn.Module):
         input_size: Optional[Tuple[int, int]] = None,
     ) -> None:
         super().__init__(
-            dim=dim,
+            '''dim=dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             use_rel_pos=use_rel_pos,
             rel_pos_zero_init=rel_pos_zero_init,
-            input_size=input_size,
+            input_size=input_size,'''
         )
         self.num_heads = num_heads
         head_dim = dim // num_heads
