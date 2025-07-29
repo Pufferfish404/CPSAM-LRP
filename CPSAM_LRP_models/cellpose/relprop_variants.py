@@ -11,6 +11,17 @@ from baselines.ViT.helpers import load_pretrained
 from baselines.ViT.weight_init import trunc_normal_
 from baselines.ViT.layer_helpers import to_2tuple
 
+from segment_anything.modeling.image_encoder import (
+    ImageEncoderViT as SAMImageEncoderViT,
+    Block as SAMBlock,
+    Attention as SAMAttention,
+    PatchEmbed as SAMPatchEmbed,
+)
+from segment_anything.modeling.common import (
+    LayerNorm2d as SAMLayerNorm2d,
+    MLPBlock as SAMMLPBlock,
+)
+
 def compute_rollout_attention(all_layer_matrices, start_layer=0):
     # adding residual consideration
     num_tokens = all_layer_matrices[0].shape[1]
@@ -24,7 +35,7 @@ def compute_rollout_attention(all_layer_matrices, start_layer=0):
         joint_attention = all_layer_matrices[i].bmm(joint_attention)
     return joint_attention
 
-class AttentionWithRelprop(nn.Module):
+class AttentionWithRelprop(SAMAttention):
     def __init__(
         self,
         dim: int,
@@ -134,7 +145,7 @@ class AttentionWithRelprop(nn.Module):
 
         return self.qkv.relprop(cam_qkv, **kwargs)
 
-class PatchEmbedWithRelprop(nn.Module):
+class PatchEmbedWithRelprop(SAMPatchEmbed):
     def __init__(
         self,
         kernel_size: Tuple[int, int] = (16, 16),
@@ -159,7 +170,7 @@ class PatchEmbedWithRelprop(nn.Module):
         cam = self.proj.relprop(cam, **kwargs)
         return cam
       
-class MLPBlockWithRelprop(nn.Module):
+class MLPBlockWithRelprop(SAMMLPBlock):
     def __init__(
         self,
         embedding_dim: int,
@@ -181,7 +192,7 @@ class MLPBlockWithRelprop(nn.Module):
         cam = self.lin1.relprop(cam, **kwargs)
         return cam
 
-class LayerNorm2dWithRelprop(nn.Module):
+class LayerNorm2dWithRelprop(SAMLayerNorm2d):
     def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
         super().__init__(
             num_channels=num_channels,
@@ -224,7 +235,7 @@ class LayerNorm2dWithRelprop(nn.Module):
         x = x + self.mu
         return x
 
-class BlockWithRelprop(nn.Module):
+class BlockWithRelprop(SAMBlock):
     def __init__(self,
         dim: int,
         num_heads: int,
@@ -285,7 +296,7 @@ class BlockWithRelprop(nn.Module):
         cam = self.clone1.relprop((cam1, cam2), **kwargs)
         return cam
 
-class ImageEncoderViTWithRelprop(nn.Module):
+class ImageEncoderViTWithRelprop(SAMImageEncoderViT):
     def __init__(
         self,
         img_size: int = 1024,
