@@ -21,6 +21,7 @@ from segment_anything.modeling.common import (
     MLPBlock as SAMMLPBlock,
 )
 from modules.layers_ours import *
+from modules.layers_ours import ConvTranspose2d
 
 class MPatchEncoder(ImageEncoderViTWithRelprop, SAMImageEncoderViT):
     pass
