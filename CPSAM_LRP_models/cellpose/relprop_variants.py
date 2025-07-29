@@ -150,7 +150,7 @@ class AttentionWithRelprop(SAMAttention):
 
         return self.qkv.relprop(cam_qkv, **kwargs)
 
-    def window_partition(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, Tuple[int, int]]:
+    def window_partition(self, x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, Tuple[int, int]]:
         """
         Partition into non-overlapping windows with padding if needed.
         Args:
@@ -175,7 +175,7 @@ class AttentionWithRelprop(SAMAttention):
 
 
     def window_unpartition(
-        windows: torch.Tensor, window_size: int, pad_hw: Tuple[int, int], hw: Tuple[int, int]
+        self, windows: torch.Tensor, window_size: int, pad_hw: Tuple[int, int], hw: Tuple[int, int]
     ) -> torch.Tensor:
         """
         Window unpartition into original sequences and removing padding.
@@ -199,7 +199,7 @@ class AttentionWithRelprop(SAMAttention):
         return x
 
 
-    def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
+    def get_rel_pos(self, q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
         """
         Get relative positional embeddings according to the relative positions of
             query and key sizes.
@@ -233,6 +233,7 @@ class AttentionWithRelprop(SAMAttention):
 
 
     def add_decomposed_rel_pos(
+        self,
         attn: torch.Tensor,
         q: torch.Tensor,
         rel_pos_h: torch.Tensor,
