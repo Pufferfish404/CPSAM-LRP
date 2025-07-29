@@ -154,7 +154,8 @@ def _forward(net, x):
     """
     X = _to_device(x, device=net.device, dtype=net.dtype)
     net.eval()
-    with torch.no_grad():
+    #switched grad on
+    with torch.enable_grad():
         y, style = net(X)[:2]
     del X
     y = _from_device(y)
