@@ -44,6 +44,7 @@ class AttentionWithRelprop(nn.Module):
         )
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
+        head_dim = self.head_dim
         self.scale = head_dim**-0.5
 
         self.qkv = Linear(dim, dim * 3, bias=qkv_bias)
