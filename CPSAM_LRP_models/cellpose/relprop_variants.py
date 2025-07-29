@@ -3,7 +3,7 @@ import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 from torch import nn 
 import torch.nn.functional as F
-from typing import Optional, Tuple, Type
+from typing import Callable, Optional, Tuple, Type
 from einops import rearrange
 from modules.layers_ours import *
 
@@ -115,6 +115,7 @@ class AttentionWithRelprop(SAMAttention):
         dots = self.matmul1([q, k]) * self.scale
         if self.use_rel_pos:
             dots, self.relprop_inner = add_decomposed_rel_pos(dots, q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W))
+            print(dots.dtype)
         attn = self.softmax(dots)
         self.save_attn(attn)
         attn.register_hook(self.save_attn_gradients)
