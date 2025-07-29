@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 __all__ = ['forward_hook', 'Clone', 'Add', 'Cat', 'ReLU', 'GELU', 'Dropout', 'BatchNorm2d', 'Linear', 'MaxPool2d',
            'AdaptiveAvgPool2d', 'AvgPool2d', 'Conv2d', 'Sequential', 'safe_divide', 'einsum', 'Softmax', 'IndexSelect',
-           'LayerNorm', 'AddEye']
+           'LayerNorm', 'AddEye', 'ConvTranspose2d', 'Add_Decomposed_Rel_Pos']
 
 
 def safe_divide(a, b):
@@ -79,7 +79,6 @@ class LayerNorm(nn.LayerNorm, RelProp):
 class Dropout(nn.Dropout, RelProp):
     pass
 
-
 class MaxPool2d(nn.MaxPool2d, RelPropSimple):
     pass
 
@@ -89,10 +88,8 @@ class LayerNorm(nn.LayerNorm, RelProp):
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, RelPropSimple):
     pass
 
-
 class AvgPool2d(nn.AvgPool2d, RelPropSimple):
     pass
-
 
 class Add(RelPropSimple):
     def forward(self, inputs):
@@ -146,8 +143,6 @@ class IndexSelect(RelProp):
             outputs = self.X * (C[0])
         return outputs
 
-
-
 class Clone(RelProp):
     def forward(self, input, num):
         self.__setattr__('num', num)
@@ -184,7 +179,6 @@ class Cat(RelProp):
 
         return outputs
 
-
 class Sequential(nn.Sequential):
     def relprop(self, R, alpha):
         for m in reversed(self._modules.values()):
@@ -202,7 +196,6 @@ class BatchNorm2d(nn.BatchNorm2d, RelProp):
         Ca = S * weight
         R = self.X * (Ca)
         return R
-
 
 class Linear(nn.Linear, RelProp):
     def relprop(self, R, alpha):
@@ -228,7 +221,6 @@ class Linear(nn.Linear, RelProp):
         R = alpha * activator_relevances - beta * inhibitor_relevances
 
         return R
-
 
 class Conv2d(nn.Conv2d, RelProp):
     def gradprop2(self, DY, weight):
@@ -330,3 +322,105 @@ class ConvTranspose2d(nn.ConvTranspose2d, RelProp):
   
               R = alpha * activator_relevances - beta * inhibitor_relevances
           return R
+
+class Add_Decomposed_Rel_Pos(RelProp):
+    def __init__(self):
+        super().__init__()
+        self.einsum_h = einsum("bhwc,hkc->bhwk")
+        self.einsum_w = einsum("bhwc,wkc->bhwk")
+
+    def get_rel_pos(self, q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
+        """
+        Get relative positional embeddings according to the relative positions of
+            query and key sizes.
+        Args:
+            q_size (int): size of query q.
+            k_size (int): size of key k.
+            rel_pos (Tensor): relative position embeddings (L, C).
+
+        Returns:
+            Extracted positional embeddings according to relative positions.
+        """
+        max_rel_dist = int(2 * max(q_size, k_size) - 1)
+        # Interpolate rel pos if needed.
+        if rel_pos.shape[0] != max_rel_dist:
+            # Interpolate rel pos.
+            rel_pos_resized = F.interpolate(
+                rel_pos.reshape(1, rel_pos.shape[0], -1).permute(0, 2, 1),
+                size=max_rel_dist,
+                mode="linear",
+            )
+            rel_pos_resized = rel_pos_resized.reshape(-1, max_rel_dist).permute(1, 0)
+        else:
+            rel_pos_resized = rel_pos
+
+        # Scale the coords with short length if shapes for q and k are different.
+        q_coords = torch.arange(q_size)[:, None] * max(k_size / q_size, 1.0)
+        k_coords = torch.arange(k_size)[None, :] * max(q_size / k_size, 1.0)
+        relative_coords = (q_coords - k_coords) + (k_size - 1) * max(q_size / k_size, 1.0)
+
+        return rel_pos_resized[relative_coords.long()]
+
+    def forward(
+        self,
+        attn: torch.Tensor,
+        q: torch.Tensor,
+        rel_pos_h: torch.Tensor,
+        rel_pos_w: torch.Tensor,
+        q_size: Tuple[int, int],
+        k_size: Tuple[int, int],
+    ) -> torch.Tensor:
+        """
+        Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
+        https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py   # noqa B950
+        Args:
+            attn (Tensor): attention map.
+            q (Tensor): query q in the attention layer with shape (B, q_h * q_w, C).
+            rel_pos_h (Tensor): relative position embeddings (Lh, C) for height axis.
+            rel_pos_w (Tensor): relative position embeddings (Lw, C) for width axis.
+            q_size (Tuple): spatial sequence size of query q with (q_h, q_w).
+            k_size (Tuple): spatial sequence size of key k with (k_h, k_w).
+
+        Returns:
+            attn (Tensor): attention map with added relative positional embeddings.
+        """
+        q_h, q_w = q_size
+        k_h, k_w = k_size
+        Rh = self.get_rel_pos(q_h, k_h, rel_pos_h)
+        Rw = self.get_rel_pos(q_w, k_w, rel_pos_w)
+
+        B, _, dim = q.shape
+        r_q = q.reshape(B, q_h, q_w, dim)
+        rel_h = self.einsum_h(r_q, Rh)
+        rel_w = self.einsum_w(r_q, Rw)
+
+        attn = (
+            attn.view(B, q_h, q_w, k_h, k_w) + rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]
+        ).view(B, q_h * q_w, k_h * k_w)
+
+        self._q_size = q_size
+        self._k_size = k_size
+        self._rel_pos_h = rel_pos_h
+        self._rel_pos_w = rel_pos_w
+        self._q = q
+
+        return attn
+
+    def relprop(self, R, alpha, **kwargs):
+
+        q_h, q_w = self._q_size
+        k_h, k_w = self._k_size
+        Rh = self.get_rel_pos(q_h, k_h, self._rel_pos_h)
+        Rw = self.get_rel_pos(q_w, k_w, self._rel_pos_w)
+
+        B, _, dim = self._q.shape
+        r_q = self._q.reshape(B, q_h, q_w, dim)
+
+        rel_h = self.einsum_h.relprop(r_q, Rh)
+        rel_w = self.einsum_w.relprop(r_q, Rw)
+
+        output = (
+            R.view(B, q_h, q_w, k_h, k_w) - rel_h[:, :, :, :, None] - rel_w[:, :, :, None, :]
+        ).view(B, q_h * q_w, k_h * k_w)
+        
+        return output
