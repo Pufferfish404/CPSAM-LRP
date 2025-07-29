@@ -70,7 +70,17 @@ class Transformer(nn.Module):
         # W2 reshapes token space to pixel space, not trainable
         self.W2 = nn.Parameter(torch.eye(self.nout * ps**2).reshape(self.nout*ps**2, self.nout, ps, ps), 
                                requires_grad=False)
-        self.deconv = ConvTranspose2d
+        self.deconv = nn.ConvTranspose2d(
+            in_channels=nout*ps**2,
+            out_channels=nout,
+            kernel_size=ps,
+            stride=ps,
+            padding=0,
+            bias=False,
+        )
+        # load your fixed weights into the layer
+        with torch.no_grad():
+            self.deconv.weight.copy_(self.W2)
         
         # fraction of layers to drop at random during training
         self.rdrop = rdrop
