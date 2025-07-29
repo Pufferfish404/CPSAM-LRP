@@ -75,7 +75,7 @@ class AttentionWithRelprop(SAMAttention):
         self.v_cam = None
         self.attn_gradients = None
 
-        self.relprop_inner = None
+        self._add_decompose_rel_pos = Add_Decomposed_Rel_Pos()
 
     def get_attn(self):
         return self.attn
@@ -117,7 +117,7 @@ class AttentionWithRelprop(SAMAttention):
 
         dots = self.matmul1([q, k]) * self.scale
         if self.use_rel_pos:
-            dots = Add_Decomposed_Rel_Pos.forward(dots, q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W))
+            dots = self._add_decompose_rel_pos(dots, q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W))
         attn = self.softmax(dots)
         self.save_attn(attn)
         attn.register_hook(self.save_attn_gradients)
@@ -140,7 +140,7 @@ class AttentionWithRelprop(SAMAttention):
         self.save_attn_cam(cam1)
 
         if self.use_rel_pos:
-            cam1 = Add_Decomposed_Rel_Pos.relprop(cam1, **kwargs)
+            cam1 = self._add_decompose_rel_pos.relprop(cam1, **kwargs)
         cam1 = self.softmax.relprop(cam1, **kwargs)
 
         # A = Q*K^T
