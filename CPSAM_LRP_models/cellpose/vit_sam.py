@@ -113,7 +113,7 @@ class Transformer(nn.Module):
 
         # readout is changed here
         x1 = self.out(x)
-        x1 = self.deconv(x1, self.W2, stride = self.ps, padding = 0)
+        x1 = self.deconv(x1, self.W2, stride = self.ps, padding = 0, kernel_size = 1)
         
         # maintain the second output of feature size 256 for backwards compatibility
            
