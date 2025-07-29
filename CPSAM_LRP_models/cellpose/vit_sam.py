@@ -71,8 +71,7 @@ class Transformer(nn.Module):
         # W2 reshapes token space to pixel space, not trainable
         self.W2 = nn.Parameter(torch.eye(self.nout * ps**2).reshape(self.nout*ps**2, self.nout, ps, ps), 
                                requires_grad=False)
-        W2 = self.W2
-        self.deconv = ConvTranspose2d(W2, self.ps, padding=0, kernel_size=1)
+        self.deconv = ConvTranspose2d
         
         # fraction of layers to drop at random during training
         self.rdrop = rdrop
@@ -115,7 +114,7 @@ class Transformer(nn.Module):
 
         # readout is changed here
         x1 = self.out(x)
-        x1 = self.deconv(x1)
+        x1 = self.deconv(x1, self.W2, stride = self.ps, padding = 0)
         
         # maintain the second output of feature size 256 for backwards compatibility
            
