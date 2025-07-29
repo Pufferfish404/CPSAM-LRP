@@ -262,8 +262,8 @@ class AttentionWithRelprop(SAMAttention):
 
         B, _, dim = q.shape
         r_q = q.reshape(B, q_h, q_w, dim)
-        rel_h = einsum("bhwc,hkc->bhwk", r_q, Rh)
-        rel_w = einsum("bhwc,wkc->bhwk", r_q, Rw)
+        rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh)
+        rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw)
 
         attn = (
             attn.view(B, q_h, q_w, k_h, k_w) + rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]
