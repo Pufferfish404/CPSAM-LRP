@@ -257,8 +257,8 @@ class AttentionWithRelprop(SAMAttention):
         """
         q_h, q_w = q_size
         k_h, k_w = k_size
-        Rh = get_rel_pos(q_h, k_h, rel_pos_h)
-        Rw = get_rel_pos(q_w, k_w, rel_pos_w)
+        Rh = self.get_rel_pos(q_h, k_h, rel_pos_h)
+        Rw = self.get_rel_pos(q_w, k_w, rel_pos_w)
 
         B, _, dim = q.shape
         r_q = q.reshape(B, q_h, q_w, dim)
