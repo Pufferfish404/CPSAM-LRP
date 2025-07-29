@@ -72,7 +72,7 @@ class Transformer(nn.Module):
         self.W2 = nn.Parameter(torch.eye(self.nout * ps**2).reshape(self.nout*ps**2, self.nout, ps, ps), 
                                requires_grad=False)
         W2 = self.W2
-        self.deconv = ConvTranspose2d(W2, self.ps, padding=0)
+        self.deconv = ConvTranspose2d(W2, self.ps, padding=0, kernel_size=ps)
         
         # fraction of layers to drop at random during training
         self.rdrop = rdrop
