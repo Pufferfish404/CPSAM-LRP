@@ -62,9 +62,9 @@ class AttentionWithRelprop(SAMAttention):
         self.proj = Linear(dim, dim)
         
         # A = Q*K^T
-        self.matmul1 = einsum('bhid,bhjd->bhij')
+        self.matmul1 = einsum('bid,bjd->bij')
         # attn = A*V
-        self.matmul2 = einsum('bhij,bhjd->bhid')
+        self.matmul2 = einsum('bij,bjd->bid')
         self.softmax = Softmax(dim=-1)
         self.attn_cam = None
         self.attn = None
